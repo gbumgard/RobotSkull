@@ -38,6 +38,7 @@ int maxPulseLength = centerPulseLength + 600;
 uint8_t servoFirst = 13;
 uint8_t servoLast = 14;
 
+#define FINGERPRINT 9999
 #define HEAD_PAN_SERVO 0
 #define HEAD_PAN_PW_MIN 900
 #define HEAD_PAN_ADC_MIN 0
@@ -66,7 +67,7 @@ uint8_t servoLast = 14;
 #define HEAD_TILT_PW_FILTER_COEFFICIENT 0.1
 #define HEAD_TILT_ADC_FILTER_COEFFICIENT 0.5
 
-#define LEFT_EYE_PAN_SERVO 3
+#define LEFT_EYE_PAN_SERVO 4
 #define LEFT_EYE_PAN_PW_MIN 900
 #define LEFT_EYE_PAN_ANGLE_MIN -45
 #define LEFT_EYE_PAN_ADC_MIN 0
@@ -76,10 +77,10 @@ uint8_t servoLast = 14;
 #define LEFT_EYE_PAN_PW_MAX 2100
 #define LEFT_EYE_PAN_ANGLE_MAX 45
 #define LEFT_EYE_PAN_ADC_MAX 1024
-#define LEFT_EYE_PAN_PW_FILTER_COEFFICIENT 0.2
+#define LEFT_EYE_PAN_PW_FILTER_COEFFICIENT 0.5
 #define LEFT_EYE_PAN_ADC_FILTER_COEFFICIENT 0.5
 
-#define LEFT_EYE_TILT_SERVO 4
+#define LEFT_EYE_TILT_SERVO 5
 #define LEFT_EYE_TILT_PW_MIN 900
 #define LEFT_EYE_TILT_ANGLE_MIN -45
 #define LEFT_EYE_TILT_ADC_MIN 0
@@ -89,10 +90,10 @@ uint8_t servoLast = 14;
 #define LEFT_EYE_TILT_PW_MAX 2100
 #define LEFT_EYE_TILT_ANGLE_MAX 45
 #define LEFT_EYE_TILT_ADC_MAX 1024
-#define LEFT_EYE_TILT_PW_FILTER_COEFFICIENT 0.2
+#define LEFT_EYE_TILT_PW_FILTER_COEFFICIENT 0.5
 #define LEFT_EYE_TILT_ADC_FILTER_COEFFICIENT 0.5
 
-#define RIGHT_EYE_PAN_SERVO 5
+#define RIGHT_EYE_PAN_SERVO 6
 #define RIGHT_EYE_PAN_PW_MIN 900
 #define RIGHT_EYE_PAN_ANGLE_MIN -45
 #define RIGHT_EYE_PAN_ADC_MIN 0
@@ -102,10 +103,10 @@ uint8_t servoLast = 14;
 #define RIGHT_EYE_PAN_PW_MAX 2100
 #define RIGHT_EYE_PAN_ANGLE_MAX 45
 #define RIGHT_EYE_PAN_ADC_MAX 1024
-#define RIGHT_EYE_PAN_PW_FILTER_COEFFICIENT 0.2
+#define RIGHT_EYE_PAN_PW_FILTER_COEFFICIENT 0.5
 #define RIGHT_EYE_PAN_ADC_FILTER_COEFFICIENT 0.5
 
-#define RIGHT_EYE_TILT_SERVO 6
+#define RIGHT_EYE_TILT_SERVO 7
 #define RIGHT_EYE_TILT_PW_MIN 900
 #define RIGHT_EYE_TILT_ANGLE_MIN -45
 #define RIGHT_EYE_TILT_ADC_MIN 0
@@ -115,7 +116,7 @@ uint8_t servoLast = 14;
 #define RIGHT_EYE_TILT_PW_MAX 2100
 #define RIGHT_EYE_TILT_ANGLE_MAX 45
 #define RIGHT_EYE_TILT_ADC_MAX 1024
-#define RIGHT_EYE_TILT_PW_FILTER_COEFFICIENT 0.2
+#define RIGHT_EYE_TILT_PW_FILTER_COEFFICIENT 0.5
 #define RIGHT_EYE_TILT_ADC_FILTER_COEFFICIENT 0.5
 
 #define MOUTH_SERVO 2
@@ -317,20 +318,25 @@ float updateFilter(float current, float sample, float coefficient) {
 int pirInputPin = 10;
 int pirState = LOW;
 int runAnimation = false;
+int enableAnimation = false;
 int trigPin = 9;
 int echoPin = 8;
 #define LED_PIN   6
-#define LED_COUNT 4
+#define LED_COUNT 8
 
 // Declare our NeoPixel strip object:
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 float duration_us = 0.0;
 float distance_cm = 0.0;
+float filtered_distance_cm = 400.0;
 float max_distance = 400.0;
 
 void updateDistanceFilter(float distance) {
-  max_distance = max_distance + .001*(distance - max_distance);
+  if (filtered_distance_cm == 0.0)
+    filtered_distance_cm = distance;
+  else
+    filtered_distance_cm = filtered_distance_cm + .02*(distance - filtered_distance_cm);
 }
 
 void updatePosition() {
@@ -458,7 +464,7 @@ void setServoAngle(int servoNum, int angle) {
 
 void saveServoStates() {
   int address = 0;
-  int stateSaved = 1234;
+  int stateSaved = FINGERPRINT;
   EEPROM.put(address,stateSaved);
   address += sizeof(stateSaved);
   int step = sizeof(Servo);
@@ -481,7 +487,7 @@ void restoreServoStates() {
   int address = 0;
   int stateSaved;
   EEPROM.get(address,stateSaved);
-  if (stateSaved != 1234) return;
+  if (stateSaved != FINGERPRINT) return;
   address += sizeof(stateSaved);
   int step = sizeof(Servo);
   EEPROM.get(address,headPanServo);
@@ -506,7 +512,7 @@ void setup() {
   pinMode(echoPin,INPUT);
 
   strip.begin();
-  strip.fill(strip.Color(128,128,128));
+  strip.fill(strip.Color(128,70,20));
   strip.show(); // Initialize all pixels to 'off'
 
   Serial.begin(115200);
@@ -537,73 +543,75 @@ void loop() {
   // measure duration of pulse from ECHO pin
   duration_us = pulseIn(echoPin, HIGH);
   distance_cm = 0.017 * duration_us;
-  //updateDistanceFilter(distance_cm);
+  updateDistanceFilter(distance_cm);
+  strip.fill(strip.ColorHSV(0,min((1.0 - (filtered_distance_cm-80)/400.0) * 255,255),255));
+  strip.show(); // Initialize all pixels to 'off'
 
-  int inputValue = digitalRead(pirInputPin);  // read input value
-  
-  if (inputValue == HIGH) {
-    if (pirState == LOW) {
-      pirState = HIGH;
-      runAnimation = true;
-      animationIndex = random(0,5);
-      strip.fill(strip.Color(255,255,255));
-      strip.show(); // Initialize all pixels to 'off'
+  if (enableAnimation) {
+    int inputValue = digitalRead(pirInputPin);  // read input value
+    
+    if (inputValue == HIGH) {
+      if (pirState == LOW) {
+        pirState = HIGH;
+        runAnimation = true;
+        animationIndex = random(0,5);
+        max_distance = distance_cm;
+      }
+    } else {
+      if (pirState == HIGH){
+        pirState = LOW;
+        runAnimation = false;
+        headPanServo.targetPw = headPanServo.centerPw;
+        headTiltServo.targetPw = headTiltServo.centerPw;
+        leftEyePanServo.targetPw = leftEyePanServo.centerPw;
+        leftEyeTiltServo.targetPw = leftEyeTiltServo.centerPw;
+        rightEyePanServo.targetPw = rightEyePanServo.centerPw;
+        rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw;
+        mouthServo.targetPw = mouthServo.centerPw;
+      }
     }
-  } else {
-    if (pirState == HIGH){
-      pirState = LOW;
-      runAnimation = false;
-      strip.fill(strip.Color(128,128,128));
-      strip.show(); // Initialize all pixels to 'off'
-      headPanServo.targetPw = headPanServo.centerPw;
-      headTiltServo.targetPw = headTiltServo.centerPw;
-      leftEyePanServo.targetPw = leftEyePanServo.centerPw;
-      leftEyeTiltServo.targetPw = leftEyeTiltServo.centerPw;
-      rightEyePanServo.targetPw = rightEyePanServo.centerPw;
-      rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw;
-      mouthServo.targetPw = mouthServo.centerPw;
-    }
-  }
 
-  if (runAnimation) {
-    switch (animationIndex) {
-      case 0:
-        headTiltServo.targetPw = HEAD_TILT_PW_MIN;
-        leftEyeTiltServo.targetPw = LEFT_EYE_TILT_PW_MIN;
-        rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MAX;
-        mouthServo.targetPw = MOUTH_PW_MAX;
-        break;
-      case 1:
-        headPanServo.targetPw = HEAD_PAN_PW_MIN;
-        leftEyePanServo.targetPw = LEFT_EYE_PAN_PW_MIN;
-        rightEyePanServo.targetPw = RIGHT_EYE_PAN_PW_MIN;
-        mouthServo.targetPw = MOUTH_PW_MAX;
-        break;
-      case 2:
-        headTiltServo.targetPw = HEAD_TILT_PW_MAX;
-        leftEyeTiltServo.targetPw = LEFT_EYE_TILT_PW_MAX;
-        rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MIN;
-        mouthServo.targetPw = MOUTH_PW_MIN;
-        break;
-      case 3:
-        headPanServo.targetPw = HEAD_PAN_PW_MAX;
-        leftEyePanServo.targetPw = LEFT_EYE_PAN_PW_MAX;
-        rightEyePanServo.targetPw = RIGHT_EYE_PAN_PW_MAX;
-        mouthServo.targetPw = MOUTH_PW_MIN;
-        break;
-      case 4:
-        leftEyePanServo.targetPw = random(LEFT_EYE_PAN_PW_MIN,LEFT_EYE_PAN_PW_MAX);
-        leftEyeTiltServo.targetPw = random(LEFT_EYE_TILT_PW_MIN,LEFT_EYE_TILT_PW_MAX);
-        rightEyePanServo.targetPw = random(RIGHT_EYE_PAN_PW_MIN,RIGHT_EYE_PAN_PW_MAX);
-        rightEyeTiltServo.targetPw = random(RIGHT_EYE_TILT_PW_MIN,RIGHT_EYE_TILT_PW_MAX);
-      case 5:
-        eyeAngle += 5;
-        leftEyePanServo.targetPw = leftEyePanServo.centerPw + EYE_PAN_VECTOR_LENGTH * cos(eyeAngle * PI/180.0);
-        leftEyeTiltServo.targetPw = leftEyeTiltServo.centerPw - EYE_TILT_VECTOR_LENGTH * sin(eyeAngle * PI/180.0);
-        rightEyePanServo.targetPw = rightEyePanServo.centerPw + EYE_PAN_VECTOR_LENGTH * cos(eyeAngle * PI/180.0);
-        rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw + EYE_TILT_VECTOR_LENGTH * sin(eyeAngle * PI/180.0);
+    if (runAnimation) {
+      switch (animationIndex) {
+        case 0:
+          headTiltServo.targetPw = HEAD_TILT_PW_MIN;
+          leftEyeTiltServo.targetPw = LEFT_EYE_TILT_PW_MIN;
+          rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MIN;
+          mouthServo.targetPw = MOUTH_PW_MAX;
+          break;
+        case 1:
+          headPanServo.targetPw = HEAD_PAN_PW_MIN;
+          leftEyePanServo.targetPw = LEFT_EYE_PAN_PW_MIN;
+          rightEyePanServo.targetPw = RIGHT_EYE_PAN_PW_MIN;
+          mouthServo.targetPw = MOUTH_PW_MAX;
+          break;
+        case 2:
+          headTiltServo.targetPw = HEAD_TILT_PW_MAX;
+          leftEyeTiltServo.targetPw = LEFT_EYE_TILT_PW_MAX;
+          rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MAX;
+          mouthServo.targetPw = MOUTH_PW_MIN;
+          break;
+        case 3:
+          headPanServo.targetPw = HEAD_PAN_PW_MAX;
+          leftEyePanServo.targetPw = LEFT_EYE_PAN_PW_MAX;
+          rightEyePanServo.targetPw = RIGHT_EYE_PAN_PW_MAX;
+          mouthServo.targetPw = MOUTH_PW_MIN;
+          break;
+        case 4:
+          leftEyePanServo.targetPw = random(LEFT_EYE_PAN_PW_MIN,LEFT_EYE_PAN_PW_MAX);
+          leftEyeTiltServo.targetPw = random(LEFT_EYE_TILT_PW_MIN,LEFT_EYE_TILT_PW_MAX);
+          rightEyePanServo.targetPw = random(RIGHT_EYE_PAN_PW_MIN,RIGHT_EYE_PAN_PW_MAX);
+          rightEyeTiltServo.targetPw = random(RIGHT_EYE_TILT_PW_MIN,RIGHT_EYE_TILT_PW_MAX);
+        case 5:
+          eyeAngle += 5;
+          leftEyePanServo.targetPw = leftEyePanServo.centerPw + EYE_PAN_VECTOR_LENGTH * cos(eyeAngle * PI/180.0);
+          leftEyeTiltServo.targetPw = leftEyeTiltServo.centerPw + EYE_TILT_VECTOR_LENGTH * sin(eyeAngle * PI/180.0);
+          rightEyePanServo.targetPw = rightEyePanServo.centerPw + EYE_PAN_VECTOR_LENGTH * cos(eyeAngle * PI/180.0);
+          rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw + EYE_TILT_VECTOR_LENGTH * sin(eyeAngle * PI/180.0);
 
+      }
     }
+
   }
 
   if (Serial) {
@@ -611,6 +619,10 @@ void loop() {
     if (c != -1) runAnimation = false;
     switch (c) {
       case -1:
+        break;
+
+      case 'a':
+        enableAnimation = ~enableAnimation;
         break;
 
       case 'K':
@@ -673,7 +685,7 @@ void loop() {
         leftEyePanServo.targetPw = leftEyePanServo.centerPw - EYE_PAN_VECTOR_LENGTH * cosine;
         leftEyeTiltServo.targetPw = leftEyeTiltServo.centerPw + EYE_TILT_VECTOR_LENGTH * sine;
         rightEyePanServo.targetPw = rightEyePanServo.centerPw - EYE_PAN_VECTOR_LENGTH * cosine;
-        rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw - EYE_TILT_VECTOR_LENGTH * sine;
+        rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw + EYE_TILT_VECTOR_LENGTH * sine;
         mouthServo.targetPw = mouthServo.centerPw + HEAD_PAN_VECTOR_LENGTH * sine;
       }
       break;
@@ -683,7 +695,7 @@ void loop() {
         leftEyePanServo.targetPw = leftEyePanServo.centerPw + EYE_PAN_VECTOR_LENGTH * cos(eyeAngle * PI/180.0);
         leftEyeTiltServo.targetPw = leftEyeTiltServo.centerPw - EYE_TILT_VECTOR_LENGTH * sin(eyeAngle * PI/180.0);
         rightEyePanServo.targetPw = rightEyePanServo.centerPw + EYE_PAN_VECTOR_LENGTH * cos(eyeAngle * PI/180.0);
-        rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw + EYE_TILT_VECTOR_LENGTH * sin(eyeAngle * PI/180.0);
+        rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw - EYE_TILT_VECTOR_LENGTH * sin(eyeAngle * PI/180.0);
         break;
 
       case '1':
@@ -738,20 +750,20 @@ void loop() {
         break;
 
       case '7':
-        rightEyeTiltServo.targetPw -= 1;
-        if (rightEyeTiltServo.targetPw < RIGHT_EYE_TILT_PW_MIN) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MIN;
+        rightEyeTiltServo.targetPw += 1;
+        if (rightEyeTiltServo.targetPw < RIGHT_EYE_TILT_PW_MAX) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MAX;
         break;
       case '&':
-        rightEyeTiltServo.targetPw -= 20;
-        if (rightEyeTiltServo.targetPw < RIGHT_EYE_TILT_PW_MIN) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MIN;
+        rightEyeTiltServo.targetPw += 20;
+        if (rightEyeTiltServo.targetPw < RIGHT_EYE_TILT_PW_MAX) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MAX;
         break;
       case '8':
-        rightEyeTiltServo.targetPw += 1;
-        if (rightEyeTiltServo.targetPw > RIGHT_EYE_TILT_PW_MAX) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MAX;
+        rightEyeTiltServo.targetPw -= 1;
+        if (rightEyeTiltServo.targetPw > RIGHT_EYE_TILT_PW_MIN) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MIN;
         break;
       case '*':
-        rightEyeTiltServo.targetPw += 20;
-        if (rightEyeTiltServo.targetPw > RIGHT_EYE_TILT_PW_MAX) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MAX;
+        rightEyeTiltServo.targetPw -= 20;
+        if (rightEyeTiltServo.targetPw > RIGHT_EYE_TILT_PW_MIN) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MIN;
         break;
 
       case 'c':
