@@ -1,124 +1,3 @@
-#if 0
-/*************************************************** 
-  This is an example for our Adafruit 16-channel PWM & Servo driver
-  Servo test - this will drive 8 servos, one after the other on the
-  first 8 pins of the PCA9685
-
-  Pick one up today in the adafruit shop!
-  ------> http://www.adafruit.com/products/815
-  
-  These drivers use I2C to communicate, 2 pins are required to  
-  interface.
-
-  Adafruit invests time and resources providing this open source code, 
-  please support Adafruit and open-source hardware by purchasing 
-  products from Adafruit!
-
-  Written by Limor Fried/Ladyada for Adafruit Industries.  
-  BSD license, all text above must be included in any redistribution
- ****************************************************/
-
-#include <Wire.h>
-#include <Adafruit_PWMServoDriver.h>
-
-// called this way, it uses the default address 0x40
-Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
-// you can also call it with a different address you want
-//Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x41);
-// you can also call it with a different address and I2C interface
-//Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40, Wire);
-int us2count(int us) {
-  return (us * 4096L) / 20000L;
-}
-
-// Depending on your servo make, the pulse width min and max may vary, you 
-// want these to be as small/large as possible without hitting the hard stop
-// for max range. You'll have to tweak them as necessary to match the servos you
-// have!
-#define SERVOMIN  900 //150 // This is the 'minimum' pulse length count (out of 4096)
-#define SERVOMAX  2100 // 600 // This is the 'maximum' pulse length count (out of 4096)
-#define USMIN  600 // This is the rounded 'minimum' microsecond length based on the minimum pulse of 150
-#define USMAX  2400 // This is the rounded 'maximum' microsecond length based on the maximum pulse of 600
-#define SERVO_FREQ 50 // Analog servos run at ~50 Hz updates
-
-// our servo # counter
-uint8_t servonum = 0;
-
-void setup() {
-  Serial.begin(9600);
-  Serial.println("8 channel Servo test!");
-
-  pwm.begin();
-  /*
-   * In theory the internal oscillator (clock) is 25MHz but it really isn't
-   * that precise. You can 'calibrate' this by tweaking this number until
-   * you get the PWM update frequency you're expecting!
-   * The int.osc. for the PCA9685 chip is a range between about 23-27MHz and
-   * is used for calculating things like writeMicroseconds()
-   * Analog servos run at ~50 Hz updates, It is importaint to use an
-   * oscilloscope in setting the int.osc frequency for the I2C PCA9685 chip.
-   * 1) Attach the oscilloscope to one of the PWM signal pins and ground on
-   *    the I2C PCA9685 chip you are setting the value for.
-   * 2) Adjust setOscillatorFrequency() until the PWM update frequency is the
-   *    expected value (50Hz for most ESCs)
-   * Setting the value here is specific to each individual I2C PCA9685 chip and
-   * affects the calculations for the PWM update frequency. 
-   * Failure to correctly set the int.osc value will cause unexpected PWM results
-   */
-  //pwm.setOscillatorFrequency(27000000);
-  pwm.setPWMFreq(SERVO_FREQ);  // Analog servos run at ~50 Hz updates
-
-  delay(10);
-}
-
-// You can use this function if you'd like to set the pulse length in seconds
-// e.g. setServoPulse(0, 0.001) is a ~1 millisecond pulse width. It's not precise!
-void setServoPulse(uint8_t n, double pulse) {
-  double pulselength;
-  
-  pulselength = 1000000;   // 1,000,000 us per second
-  pulselength /= SERVO_FREQ;   // Analog servos run at ~60 Hz updates
-  Serial.print(pulselength); Serial.println(" us per period"); 
-  pulselength /= 4096;  // 12 bits of resolution
-  Serial.print(pulselength); Serial.println(" us per bit"); 
-  pulse *= 1000000;  // convert input seconds to us
-  pulse /= pulselength;
-  Serial.println(pulse);
-  pwm.setPWM(n, 0, pulse);
-}
-
-void loop() {
-  // Drive each servo one at a time using setPWM()
-  Serial.println(servonum);
-  for (uint16_t pulselen = SERVOMIN; pulselen < SERVOMAX; pulselen++) {
-    pwm.setPWM(servonum, 0, us2count(pulselen));
-  }
-
-  delay(500);
-  for (uint16_t pulselen = SERVOMAX; pulselen > SERVOMIN; pulselen--) {
-    pwm.setPWM(servonum, 0, us2count(pulselen));
-  }
-
-  delay(500);
-
-  // Drive each servo one at a time using writeMicroseconds(), it's not precise due to calculation rounding!
-  // The writeMicroseconds() function is used to mimic the Arduino Servo library writeMicroseconds() behavior. 
-  //for (uint16_t microsec = USMIN; microsec < USMAX; microsec++) {
-  //  pwm.writeMicroseconds(servonum, microsec);
-  //}
-
-  //delay(500);
-  //for (uint16_t microsec = USMAX; microsec > USMIN; microsec--) {
-  //  pwm.writeMicroseconds(servonum, microsec);
-  //}
-
-  //delay(500);
-
-  //servonum++;
-  //if (servonum > 7) servonum = 0; // Testing the first 8 servo channels
-}
-#endif
-#if 1
 /*************************************************** 
   This is an example for our Adafruit 16-channel PWM & Servo driver
   Servo test - this will drive 16 servos, one after the other
@@ -139,6 +18,7 @@ void loop() {
 
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
+#include <Adafruit_NeoPixel.h>
 #include <EEPROM.h>
 
 // called this way, it uses the default address 0x40
@@ -158,6 +38,7 @@ int maxPulseLength = centerPulseLength + 600;
 uint8_t servoFirst = 13;
 uint8_t servoLast = 14;
 
+#define FINGERPRINT 9999
 #define HEAD_PAN_SERVO 0
 #define HEAD_PAN_PW_MIN 900
 #define HEAD_PAN_ADC_MIN 0
@@ -186,7 +67,7 @@ uint8_t servoLast = 14;
 #define HEAD_TILT_PW_FILTER_COEFFICIENT 0.1
 #define HEAD_TILT_ADC_FILTER_COEFFICIENT 0.5
 
-#define LEFT_EYE_PAN_SERVO 3
+#define LEFT_EYE_PAN_SERVO 4
 #define LEFT_EYE_PAN_PW_MIN 900
 #define LEFT_EYE_PAN_ANGLE_MIN -45
 #define LEFT_EYE_PAN_ADC_MIN 0
@@ -196,10 +77,10 @@ uint8_t servoLast = 14;
 #define LEFT_EYE_PAN_PW_MAX 2100
 #define LEFT_EYE_PAN_ANGLE_MAX 45
 #define LEFT_EYE_PAN_ADC_MAX 1024
-#define LEFT_EYE_PAN_PW_FILTER_COEFFICIENT 0.2
+#define LEFT_EYE_PAN_PW_FILTER_COEFFICIENT 0.5
 #define LEFT_EYE_PAN_ADC_FILTER_COEFFICIENT 0.5
 
-#define LEFT_EYE_TILT_SERVO 4
+#define LEFT_EYE_TILT_SERVO 5
 #define LEFT_EYE_TILT_PW_MIN 900
 #define LEFT_EYE_TILT_ANGLE_MIN -45
 #define LEFT_EYE_TILT_ADC_MIN 0
@@ -209,10 +90,10 @@ uint8_t servoLast = 14;
 #define LEFT_EYE_TILT_PW_MAX 2100
 #define LEFT_EYE_TILT_ANGLE_MAX 45
 #define LEFT_EYE_TILT_ADC_MAX 1024
-#define LEFT_EYE_TILT_PW_FILTER_COEFFICIENT 0.2
+#define LEFT_EYE_TILT_PW_FILTER_COEFFICIENT 0.5
 #define LEFT_EYE_TILT_ADC_FILTER_COEFFICIENT 0.5
 
-#define RIGHT_EYE_PAN_SERVO 5
+#define RIGHT_EYE_PAN_SERVO 6
 #define RIGHT_EYE_PAN_PW_MIN 900
 #define RIGHT_EYE_PAN_ANGLE_MIN -45
 #define RIGHT_EYE_PAN_ADC_MIN 0
@@ -222,10 +103,10 @@ uint8_t servoLast = 14;
 #define RIGHT_EYE_PAN_PW_MAX 2100
 #define RIGHT_EYE_PAN_ANGLE_MAX 45
 #define RIGHT_EYE_PAN_ADC_MAX 1024
-#define RIGHT_EYE_PAN_PW_FILTER_COEFFICIENT 0.2
+#define RIGHT_EYE_PAN_PW_FILTER_COEFFICIENT 0.5
 #define RIGHT_EYE_PAN_ADC_FILTER_COEFFICIENT 0.5
 
-#define RIGHT_EYE_TILT_SERVO 6
+#define RIGHT_EYE_TILT_SERVO 7
 #define RIGHT_EYE_TILT_PW_MIN 900
 #define RIGHT_EYE_TILT_ANGLE_MIN -45
 #define RIGHT_EYE_TILT_ADC_MIN 0
@@ -235,7 +116,7 @@ uint8_t servoLast = 14;
 #define RIGHT_EYE_TILT_PW_MAX 2100
 #define RIGHT_EYE_TILT_ANGLE_MAX 45
 #define RIGHT_EYE_TILT_ADC_MAX 1024
-#define RIGHT_EYE_TILT_PW_FILTER_COEFFICIENT 0.2
+#define RIGHT_EYE_TILT_PW_FILTER_COEFFICIENT 0.5
 #define RIGHT_EYE_TILT_ADC_FILTER_COEFFICIENT 0.5
 
 #define MOUTH_SERVO 2
@@ -437,14 +318,25 @@ float updateFilter(float current, float sample, float coefficient) {
 int pirInputPin = 10;
 int pirState = LOW;
 int runAnimation = false;
+int enableAnimation = false;
 int trigPin = 9;
 int echoPin = 8;
+#define LED_PIN   6
+#define LED_COUNT 8
+
+// Declare our NeoPixel strip object:
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+
 float duration_us = 0.0;
 float distance_cm = 0.0;
+float filtered_distance_cm = 400.0;
 float max_distance = 400.0;
 
 void updateDistanceFilter(float distance) {
-  max_distance = max_distance + .001*(distance - max_distance);
+  if (filtered_distance_cm == 0.0)
+    filtered_distance_cm = distance;
+  else
+    filtered_distance_cm = filtered_distance_cm + .02*(distance - filtered_distance_cm);
 }
 
 void updatePosition() {
@@ -572,7 +464,7 @@ void setServoAngle(int servoNum, int angle) {
 
 void saveServoStates() {
   int address = 0;
-  int stateSaved = 1234;
+  int stateSaved = FINGERPRINT;
   EEPROM.put(address,stateSaved);
   address += sizeof(stateSaved);
   int step = sizeof(Servo);
@@ -595,7 +487,7 @@ void restoreServoStates() {
   int address = 0;
   int stateSaved;
   EEPROM.get(address,stateSaved);
-  if (stateSaved != 1234) return;
+  if (stateSaved != FINGERPRINT) return;
   address += sizeof(stateSaved);
   int step = sizeof(Servo);
   EEPROM.get(address,headPanServo);
@@ -618,6 +510,10 @@ void setup() {
   pinMode(pirInputPin,INPUT);
   pinMode(trigPin,OUTPUT);
   pinMode(echoPin,INPUT);
+
+  strip.begin();
+  strip.fill(strip.Color(128,70,20));
+  strip.show(); // Initialize all pixels to 'off'
 
   Serial.begin(115200);
   //while(Serial.read() == -1);
@@ -647,69 +543,75 @@ void loop() {
   // measure duration of pulse from ECHO pin
   duration_us = pulseIn(echoPin, HIGH);
   distance_cm = 0.017 * duration_us;
-  //updateDistanceFilter(distance_cm);
+  updateDistanceFilter(distance_cm);
+  strip.fill(strip.ColorHSV(0,min((1.0 - (filtered_distance_cm-80)/400.0) * 255,255),255));
+  strip.show(); // Initialize all pixels to 'off'
 
-  int inputValue = digitalRead(pirInputPin);  // read input value
-  
-  if (inputValue == HIGH) {
-    if (pirState == LOW) {
-      pirState = HIGH;
-      runAnimation = true;
-      animationIndex = random(0,5);
+  if (enableAnimation) {
+    int inputValue = digitalRead(pirInputPin);  // read input value
+    
+    if (inputValue == HIGH) {
+      if (pirState == LOW) {
+        pirState = HIGH;
+        runAnimation = true;
+        animationIndex = random(0,5);
+        max_distance = distance_cm;
+      }
+    } else {
+      if (pirState == HIGH){
+        pirState = LOW;
+        runAnimation = false;
+        headPanServo.targetPw = headPanServo.centerPw;
+        headTiltServo.targetPw = headTiltServo.centerPw;
+        leftEyePanServo.targetPw = leftEyePanServo.centerPw;
+        leftEyeTiltServo.targetPw = leftEyeTiltServo.centerPw;
+        rightEyePanServo.targetPw = rightEyePanServo.centerPw;
+        rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw;
+        mouthServo.targetPw = mouthServo.centerPw;
+      }
     }
-  } else {
-    if (pirState == HIGH){
-      pirState = LOW;
-      runAnimation = false;
-      headPanServo.targetPw = headPanServo.centerPw;
-      headTiltServo.targetPw = headTiltServo.centerPw;
-      leftEyePanServo.targetPw = leftEyePanServo.centerPw;
-      leftEyeTiltServo.targetPw = leftEyeTiltServo.centerPw;
-      rightEyePanServo.targetPw = rightEyePanServo.centerPw;
-      rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw;
-      mouthServo.targetPw = mouthServo.centerPw;
-    }
-  }
 
-  if (runAnimation) {
-    switch (animationIndex) {
-      case 0:
-        headTiltServo.targetPw = HEAD_TILT_PW_MIN;
-        leftEyeTiltServo.targetPw = LEFT_EYE_TILT_PW_MIN;
-        rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MAX;
-        mouthServo.targetPw = MOUTH_PW_MAX;
-        break;
-      case 1:
-        headPanServo.targetPw = HEAD_PAN_PW_MIN;
-        leftEyePanServo.targetPw = LEFT_EYE_PAN_PW_MIN;
-        rightEyePanServo.targetPw = RIGHT_EYE_PAN_PW_MIN;
-        mouthServo.targetPw = MOUTH_PW_MAX;
-        break;
-      case 2:
-        headTiltServo.targetPw = HEAD_TILT_PW_MAX;
-        leftEyeTiltServo.targetPw = LEFT_EYE_TILT_PW_MAX;
-        rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MIN;
-        mouthServo.targetPw = MOUTH_PW_MIN;
-        break;
-      case 3:
-        headPanServo.targetPw = HEAD_PAN_PW_MAX;
-        leftEyePanServo.targetPw = LEFT_EYE_PAN_PW_MAX;
-        rightEyePanServo.targetPw = RIGHT_EYE_PAN_PW_MAX;
-        mouthServo.targetPw = MOUTH_PW_MIN;
-        break;
-      case 4:
-        leftEyePanServo.targetPw = random(LEFT_EYE_PAN_PW_MIN,LEFT_EYE_PAN_PW_MAX);
-        leftEyeTiltServo.targetPw = random(LEFT_EYE_TILT_PW_MIN,LEFT_EYE_TILT_PW_MAX);
-        rightEyePanServo.targetPw = random(RIGHT_EYE_PAN_PW_MIN,RIGHT_EYE_PAN_PW_MAX);
-        rightEyeTiltServo.targetPw = random(RIGHT_EYE_TILT_PW_MIN,RIGHT_EYE_TILT_PW_MAX);
-      case 5:
-        eyeAngle += 5;
-        leftEyePanServo.targetPw = leftEyePanServo.centerPw + EYE_PAN_VECTOR_LENGTH * cos(eyeAngle * PI/180.0);
-        leftEyeTiltServo.targetPw = leftEyeTiltServo.centerPw - EYE_TILT_VECTOR_LENGTH * sin(eyeAngle * PI/180.0);
-        rightEyePanServo.targetPw = rightEyePanServo.centerPw + EYE_PAN_VECTOR_LENGTH * cos(eyeAngle * PI/180.0);
-        rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw + EYE_TILT_VECTOR_LENGTH * sin(eyeAngle * PI/180.0);
+    if (runAnimation) {
+      switch (animationIndex) {
+        case 0:
+          headTiltServo.targetPw = HEAD_TILT_PW_MIN;
+          leftEyeTiltServo.targetPw = LEFT_EYE_TILT_PW_MIN;
+          rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MIN;
+          mouthServo.targetPw = MOUTH_PW_MAX;
+          break;
+        case 1:
+          headPanServo.targetPw = HEAD_PAN_PW_MIN;
+          leftEyePanServo.targetPw = LEFT_EYE_PAN_PW_MIN;
+          rightEyePanServo.targetPw = RIGHT_EYE_PAN_PW_MIN;
+          mouthServo.targetPw = MOUTH_PW_MAX;
+          break;
+        case 2:
+          headTiltServo.targetPw = HEAD_TILT_PW_MAX;
+          leftEyeTiltServo.targetPw = LEFT_EYE_TILT_PW_MAX;
+          rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MAX;
+          mouthServo.targetPw = MOUTH_PW_MIN;
+          break;
+        case 3:
+          headPanServo.targetPw = HEAD_PAN_PW_MAX;
+          leftEyePanServo.targetPw = LEFT_EYE_PAN_PW_MAX;
+          rightEyePanServo.targetPw = RIGHT_EYE_PAN_PW_MAX;
+          mouthServo.targetPw = MOUTH_PW_MIN;
+          break;
+        case 4:
+          leftEyePanServo.targetPw = random(LEFT_EYE_PAN_PW_MIN,LEFT_EYE_PAN_PW_MAX);
+          leftEyeTiltServo.targetPw = random(LEFT_EYE_TILT_PW_MIN,LEFT_EYE_TILT_PW_MAX);
+          rightEyePanServo.targetPw = random(RIGHT_EYE_PAN_PW_MIN,RIGHT_EYE_PAN_PW_MAX);
+          rightEyeTiltServo.targetPw = random(RIGHT_EYE_TILT_PW_MIN,RIGHT_EYE_TILT_PW_MAX);
+        case 5:
+          eyeAngle += 5;
+          leftEyePanServo.targetPw = leftEyePanServo.centerPw + EYE_PAN_VECTOR_LENGTH * cos(eyeAngle * PI/180.0);
+          leftEyeTiltServo.targetPw = leftEyeTiltServo.centerPw + EYE_TILT_VECTOR_LENGTH * sin(eyeAngle * PI/180.0);
+          rightEyePanServo.targetPw = rightEyePanServo.centerPw + EYE_PAN_VECTOR_LENGTH * cos(eyeAngle * PI/180.0);
+          rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw + EYE_TILT_VECTOR_LENGTH * sin(eyeAngle * PI/180.0);
 
+      }
     }
+
   }
 
   if (Serial) {
@@ -717,6 +619,10 @@ void loop() {
     if (c != -1) runAnimation = false;
     switch (c) {
       case -1:
+        break;
+
+      case 'a':
+        enableAnimation = ~enableAnimation;
         break;
 
       case 'K':
@@ -779,7 +685,7 @@ void loop() {
         leftEyePanServo.targetPw = leftEyePanServo.centerPw - EYE_PAN_VECTOR_LENGTH * cosine;
         leftEyeTiltServo.targetPw = leftEyeTiltServo.centerPw + EYE_TILT_VECTOR_LENGTH * sine;
         rightEyePanServo.targetPw = rightEyePanServo.centerPw - EYE_PAN_VECTOR_LENGTH * cosine;
-        rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw - EYE_TILT_VECTOR_LENGTH * sine;
+        rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw + EYE_TILT_VECTOR_LENGTH * sine;
         mouthServo.targetPw = mouthServo.centerPw + HEAD_PAN_VECTOR_LENGTH * sine;
       }
       break;
@@ -789,7 +695,7 @@ void loop() {
         leftEyePanServo.targetPw = leftEyePanServo.centerPw + EYE_PAN_VECTOR_LENGTH * cos(eyeAngle * PI/180.0);
         leftEyeTiltServo.targetPw = leftEyeTiltServo.centerPw - EYE_TILT_VECTOR_LENGTH * sin(eyeAngle * PI/180.0);
         rightEyePanServo.targetPw = rightEyePanServo.centerPw + EYE_PAN_VECTOR_LENGTH * cos(eyeAngle * PI/180.0);
-        rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw + EYE_TILT_VECTOR_LENGTH * sin(eyeAngle * PI/180.0);
+        rightEyeTiltServo.targetPw = rightEyeTiltServo.centerPw - EYE_TILT_VECTOR_LENGTH * sin(eyeAngle * PI/180.0);
         break;
 
       case '1':
@@ -844,20 +750,20 @@ void loop() {
         break;
 
       case '7':
-        rightEyeTiltServo.targetPw -= 1;
-        if (rightEyeTiltServo.targetPw < RIGHT_EYE_TILT_PW_MIN) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MIN;
+        rightEyeTiltServo.targetPw += 1;
+        if (rightEyeTiltServo.targetPw < RIGHT_EYE_TILT_PW_MAX) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MAX;
         break;
       case '&':
-        rightEyeTiltServo.targetPw -= 20;
-        if (rightEyeTiltServo.targetPw < RIGHT_EYE_TILT_PW_MIN) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MIN;
+        rightEyeTiltServo.targetPw += 20;
+        if (rightEyeTiltServo.targetPw < RIGHT_EYE_TILT_PW_MAX) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MAX;
         break;
       case '8':
-        rightEyeTiltServo.targetPw += 1;
-        if (rightEyeTiltServo.targetPw > RIGHT_EYE_TILT_PW_MAX) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MAX;
+        rightEyeTiltServo.targetPw -= 1;
+        if (rightEyeTiltServo.targetPw > RIGHT_EYE_TILT_PW_MIN) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MIN;
         break;
       case '*':
-        rightEyeTiltServo.targetPw += 20;
-        if (rightEyeTiltServo.targetPw > RIGHT_EYE_TILT_PW_MAX) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MAX;
+        rightEyeTiltServo.targetPw -= 20;
+        if (rightEyeTiltServo.targetPw > RIGHT_EYE_TILT_PW_MIN) rightEyeTiltServo.targetPw = RIGHT_EYE_TILT_PW_MIN;
         break;
 
       case 'c':
@@ -957,5 +863,3 @@ void loop() {
   }
   updatePosition();
 }
-
-#endif
