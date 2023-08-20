@@ -322,7 +322,7 @@ int enableAnimation = false;
 int trigPin = 9;
 int echoPin = 8;
 #define LED_PIN   6
-#define LED_COUNT 8
+#define LED_COUNT 16
 
 // Declare our NeoPixel strip object:
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
